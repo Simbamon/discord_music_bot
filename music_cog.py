@@ -1,4 +1,5 @@
 import discord
+import asyncio
 from discord.ext import commands
 
 from youtube_dl import YoutubeDL
@@ -64,23 +65,46 @@ class music_cog(commands.Cog):
             self.vc.play(discord.FFmpegPCMAudio(m_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
         else:
             self.is_playing = False
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+    
+        if not member.id == self.bot.user.id:
+            return
+
+        elif before.channel is None:
+            voice = after.channel.guild.voice_client
+            time = 0
+            while True:
+                await asyncio.sleep(1)
+                time = time + 1
+                if voice.is_playing() and not voice.is_paused():
+                    time = 0
+                if time == 180:
+                    await voice.disconnect()
+                if not voice.is_connected():
+                    break
     
     @commands.command(name="play", aliases=["p"], help="Plays a selected song from youtube")
     async def play(self, ctx, *args):
         query = " ".join(args)
         
         voice_channel = ctx.author.voice.channel
+
         if voice_channel is None:
             #you need to be connected so that the bot knows where to go
-            await ctx.send("Connect to a voice channel!")
+            await ctx.send(f"Hi {ctx.author.mention}, you should join a voice channel")
         elif self.is_paused:
             self.vc.resume()
         else:
             song = self.search_yt(query)
+            embed = (discord.Embed(title= "Song added to the queue",
+                                   description = f"Added by - {ctx.author.mention}",
+                                   color=discord.Color.green()))
             if type(song) == type(True):
                 await ctx.send("Could not download the song. Incorrect format try another keyword. This could be due to playlist or a livestream format.")
             else:
-                await ctx.send("Song added to the queue")
+                await ctx.send(embed=embed)
                 self.music_queue.append([song, voice_channel])
                 
                 if self.is_playing == False:
